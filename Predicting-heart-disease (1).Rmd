@@ -1,0 +1,744 @@
+---
+title: 'Predicting heart disease'
+author: 'Alejandro González'
+date: '`r format(Sys.Date(),"%e de %B, %Y")`'
+output:
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+---
+
+```{r, include=FALSE}
+#knitr::opts_chunk$set(echo = FALSE, comment = NULL, cache = TRUE)
+
+```
+
+\pagebreak  
+
+# Step 1: collecting data
+
+Data in this exercise is a subset of the complete dataset available at http://archive.ics.uci.edu/ml. The dataset was originally scraped from UCI reposritory, 
+you can find it in this link.
+
+```{r}
+# import the CSV file
+myfile <-"heart.dat"
+data <- read.csv(myfile,header = FALSE, sep = " ")
+
+```  
+
+# Step 2 - exploring and preparing the data
+
+Let's explore the data and see if we can shine some light on the relationships. At the
+same time, we will prepare the data for use with the kNN learning method.
+
+Using the command `str(data)`, we can confirm that the data is structured with
+`r ncol(data)` examples and `r nrow(data)` features as we expected. The first several lines of output are
+as follows:
+
+```{r}
+# examine the structure of the data data frame
+str(data, list.len = 4)
+
+```
+
+## Shuffled the data  
+
+In this step I mix the data so that when I randomly select the data is not all the same type of data, for that I use the function `sample ()` 
+```{r}
+n <- nrow(data)
+shuffled_rows <- sample(n)
+shuffled_data <- data[shuffled_rows, ]
+
+```
+
+## Transformation - normalizing numeric data
+
+To normalize these features, we need to create a `normalize()` function in R. This
+function takes a vector `x` of numeric values, and for each value in `x`, subtract the
+minimum value in `x` and divide by the range of values in `x`. Finally, the resulting
+vector is returned. The code for the function is as follows:
+```{r}
+# create normalization function
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+
+```
+
+Next I normalize the data stored in the variable `shuffled_data` and save it in a new variable called` normal_data`, 
+when normalizing the data I make sure that they are all on the same scale, and not that there will be problems when using the algorithms.
+When normalizing the data, you have to pay attention to the fact that there are columns like two, 
+for example that the range of the values is already between 0 and 1, so in the columns in which this case occurs, they do not have to be normalized.
+To normalize the data I have used the `lapply ()` function, lapply returns a list of the same length as x, each element of which is the result of applying
+`normalize ()` to the corresponding element of x.  
+I have also used the `data.frame ()` function to create data frames, tightly coupled collections of variables that share many of the properties of arrays and
+lists, used as a fundamental data structure by most R modeling programs .
+```{r}
+normal_data <- data.frame(lapply(shuffled_data, normalize))
+
+```
+
+we can see that the data has been normalized correctly by using the `str ()` function on the already normalized data:
+```{r}
+str(normal_data)
+
+```
+
+## Data preparation - creating training and test datasets
+
+To use all the algorithms we need to have the data separated into train and test, we differentiate them into these two types because the trian are the data that
+we use to train a model and the tests are the data that we reserve to check if the model that we have generated from the training data it works. 
+That is, whether the responses predicted by the model for a totally new case are correct or not.  
+
+In this exercise the statement specifies that the data must be divided into a proportion training (67%) and test (33%), to do the division we use the data found
+in the variable `noraml_data`
+```{r}
+train_set <- normal_data[1:round(0.67 * n),]
+test_set <- normal_data[(round(0.67 * n)+1):n,]
+
+```  
+
+To know which column I have to take as a label I went to the web page, where the data appears, since the objective of the work is to know 
+if a patient has a heart disease or not, the column that tells you is 14, in this column there are two values, the number 1 corresponds to 
+the absence of a heart disease and the number 2 means that the patient does have a disease
+```{r}
+train_set_labels <- train_set[,14]
+test_set_labels <- test_set[,14]
+
+```
+
+\pagebreak
+
+# Step 3 - Explore the different algorithms
+
+To check the correct operation of the algorithms, I will check three factors:  
+1.- data transformation (if necessary)  
+2.- model training and evaluation  
+3.- model improvement (parameter tuning)  
+  
+## KNN
+To be able to use the KNN algorithm, all the variables have to be numeric, and although they are expressed with numbers, they are categorical variables, 
+and these are columns 3, 7, 13, I have obtained this information from the web where the data comes from. 
+
+### Data transformation
+To convert them into vectors I use the `factor ()` function, at this point I had a problem, the data was already separated into ** train ** and ** test **, 
+so I repeated the operation of converting them to factor for the two types
+
+```{r}
+train_set_KNN <- train_set
+test_set_KNN <- test_set
+
+``` 
+
+```{r}
+train_set_KNN$V3 <- factor(train_set_KNN$V3)
+train_set_KNN$V7 <- factor(train_set_KNN$V7)
+train_set_KNN$V13 <- factor(train_set_KNN$V13)
+
+```
+
+```{r}
+test_set_KNN$V3 <- factor(test_set_KNN$V3)
+test_set_KNN$V7 <- factor(test_set_KNN$V7)
+test_set_KNN$V13 <- factor(test_set_KNN$V13)
+
+```
+
+To check that the change you have made before has worked and is correct, I check it with the `str ()` function
+```{r}
+str(train_set_KNN)
+
+``` 
+
+\pagebreak
+
+```{r}
+str(test_set_KNN)
+
+```
+
+### Model training and evaluation
+To classify our test instances, I will use a kNN implementation from the `class` package, which provides a set of basic R functions for classification. 
+If this package is not already installed on your system, you can install it by typing:
+```{r}
+# load the "class" library
+#install.packages(class)
+
+```
+
+To load the package during any session in which you wish to use the functions, simply enter the command ... 
+```{r}
+library(class)
+
+```
+
+Now I can use the `knn()` function to classify the test data:
+```{r}
+data_test_KNN <- knn(train = train_set_KNN, test = test_set_KNN, cl = train_set_labels, k = 13)
+
+```
+
+As our training data includes 181 instances, I chose `k = 13`, an odd number roughly equal to the square root of 181 With a two-category outcome, using an
+odd number eliminates the chance of ending with a tie vote. The `knn()` function returns a factor vector of predicted labels for each of the
+examples in the test dataset, which I have assigned to `data_test_KNN`.    
+
+The next step of the process is to evaluate how well the predicted classes in the `data_test_KNN` vector match up with the known values in the `test_labels`
+vector. To do this, I will use the `CrossTable()` function in the `gmodels`
+package.
+If you haven't done so already, please install this package using the command `install.packages("gmodels")`. After loading the package with ...
+
+```{r}
+# load the "gmodels" library
+library(gmodels)
+
+```
+
+\pagebreak
+
+we can create a cross tabulation indicating the agreement between the two vectors. Specifying `prop.chisq = FALSE` will remove the chi-square values
+that are not needed, from the output:
+```{r}
+# Create the cross tabulation of predicted vs. actual
+conf.mat <- CrossTable(x = test_set_labels, y = data_test_KNN, prop.chisq = FALSE)
+
+```
+
+The cell percentages in the table indicate the proportion of values that fall into four
+categories. In the top-left cell (labeled **TN**), are the true negative results. These `r conf.mat$t[1,1]`
+of `r sum(conf.mat$t)` values indicate cases where the patient have or not a heart disease, and the kNN algorithm
+correctly identified it as such. The bottom-right cell (labeled **TP**), indicates the true
+positive results, where the classifier and the clinically determined label agree that
+the patient has a disease . A total of `r conf.mat$t[2,2]` of `r sum(conf.mat$t)` predictions were true positives.  
+
+The cells that fall on the other diagonal contain counts of examples where the kNN
+approach did not agree with the true etiquette. The examples `r conf.mat $ t [2,1]` in the lower left cell ** FN ** are
+false negative results; in this case, the predicted value was that the patient was healthy when he really was not. Errors in this direction can be extremely
+costly, as It can lead a patient to believe that he is not sick when in fact he does have heart disease.The cell labeled ** FP ** will contain the 
+false positive results, if any. These values occur when the model classifies a healthy patient with one with heart disease.  
+
+\pagebreak
+
+A total of `r conf.mat $ t [2,1]` of `r sum (conf.mat $ t)` masses were incorrectly classified by the
+kNN approach. While the 98 percent accuracy seems impressive for a few lines of R
+code, we could try another iteration of the model to see if we can improve the
+performance and reduce the number of values that have been misclassified,
+particularly since the errors were dangerous false negatives. Although such errors are less dangerous than a false
+negative result should also be avoided as they could lead to
+burden on the health care system, or additional stress on the patient, such as
+Testing or treatment may need to be provided.
+
+### Model improvement
+I will attempt two simple variations on our previous classifier. First, we will
+employ an alternative method for rescaling our numeric features. Second, we will
+try several different values for *k*.
+
+#### Transformation - z-score standardization
+Although normalization is traditionally used for kNN classification, it is not always
+be the most suitable way to scale functions. Because standardized z-score values
+have no predefined minimums and maximums, extreme values are not compressed
+toward the center. One might suspect that with heart disease, we could see some very extreme outliers, as some are more serious than others. So it could be
+reasonable to allow outliers to be weighted more in the distance calculation.
+Let's see if z-score standardization can improve our predictive accuracy.  
+
+To standardize a vector, we can use R's built-in `scale ()` function, which by default
+rescale the values using z-score standardization. The `scale ()` function offers the
+added benefit that it can be applied directly to a data frame, so we can avoid using
+of the `lapply ()` function. To create a standardized z-score version of the data,
+I'm going to use the following command, which scales all the features with the exception of
+`V14`, which is the column that says if the patient has heart disease or not
+
+```{r}
+# use the scale() function to z-score standardize a data frame
+data_z <- as.data.frame(scale(shuffled_data[-14]))
+
+```
+
+To confirm that the transformation was applied correctly, we can look at the summary statistics:
+
+```{r}
+# confirm that the transformation was applied correctly
+summary(data_z)
+
+```
+
+```{r}
+train_set_z <- data_z[1:round(0.67 * n),]
+test_set_z <- data_z[(round(0.67 * n)+1):n,]
+
+```  
+The mean of a z-score standardized variable should always be zero, and the range
+should be fairly compact. A z-score greater than 3 or less than -3 indicates an
+extremely rare value. The previous summary seems reasonable.
+As we had done before, we need to divide the data into training and test sets, then
+classify the test instances using the `knn()` function. We'll then compare the predicted
+labels to the actual labels using `CrossTable()`:
+
+```{r}
+# re-classify test cases
+standardized_KNN <- knn(train = train_set_z, test = test_set_z,
+                      cl = train_set_labels, k = 13)
+# Create the cross tabulation of predicted vs. actual
+conf.mat1 <- CrossTable(x = test_set_labels, y = standardized_KNN,
+           prop.chisq = FALSE)
+
+```
+\pagebreak
+
+Unfortunately, in the following table, the results of our new transformation show a
+slight decline in accuracy. The instances where I had correctly classified `r  sum(diag(conf.mat$t))` percent
+of examples previously, I classified only `r  sum(diag(conf.mat1$t))` percent correctly this time. Making
+matters worse, I did no better at classifying the dangerous false negatives.
+
+#### Testing alternative values of k
+I may be able do even better by examining performance across various values of k.
+Using the normalized training and test datasets, the records were classified
+using several different `k` values. The number of false negatives and false positives are
+shown for each iteration:  
+
+```{r, include=FALSE}
+# try several different values of k
+
+ks <- c(1,5,11,15,21,27)
+resum <- data.frame(ks, FN=NA, FP=NA, mal_clas=NA)
+
+j <- 0
+for (i in ks){
+  j <- j +1
+  Hd_test_pred <- knn(train = train_set_KNN, test = test_set_KNN, cl = train_set_labels, k=i)
+  conf.mat <- CrossTable(x = test_set_labels, y = Hd_test_pred, prop.chisq=FALSE)
+  
+  resum[j,2:4] <- c(conf.mat$t[2,1], conf.mat$t[1,2], ((conf.mat$t[1,2]+conf.mat$t[2,1])/sum(conf.mat$t))*100)
+}
+
+```
+
+```{r}
+library(knitr)
+kable(resum, col.names=c("k value", "# false negatives", 
+      "# false positives", "% classified Incorrectly"),
+      align= c("l","c","c","c"))
+
+```
+
+## Naïve Bayes classifier  
+### Data transformation
+For the naive bayes algorithm I also have to do the transformation of the data as I have done previously for the knn algorithm, 
+so I repeat the lines of code using the `factor ()` function, converting the categorical variables into numeric variables. In the previous section, 
+I saved the value already converted into a factor over the variables `test_set` and` train_set`.
+```{r}
+train_set_NB <- train_set
+test_set_NB <- test_set
+
+```
+
+```{r}
+train_set_NB$V3 <- factor(train_set_NB$V3)
+train_set_NB$V7 <- factor(train_set_NB$V7)
+train_set_NB$V13 <- factor(train_set_NB$V13)
+train_set_NB$V14 <- factor(train_set_NB$V14)
+
+```
+
+```{r}
+test_set_NB$V3 <- factor(test_set_NB$V3)
+test_set_NB$V7 <- factor(test_set_NB$V7)
+test_set_NB$V13 <- factor(test_set_NB$V13)
+test_set_NB$V14 <- factor(test_set_NB$V14)
+
+```
+
+To check that the change you have made before has worked and is correct, I check it with the `str ()` function
+```{r}
+str(train_set_NB)
+
+``` 
+
+### Model training and evaluation
+The Naive Bayes implementation I will employ is in the `e1071` package. First I will obtain a Naive Bayes model object:
+```{r}
+library(e1071)
+samples_classifier <- naiveBayes(train_set_NB[-14], train_set_NB[,14], laplace = 1)
+
+```
+
+and then I will use it to make predictions on the test data:
+```{r}
+samples_test_NB <- predict(samples_classifier, test_set_NB)
+
+```
+
+Finally, I will evaluate the performance of our algorithm:
+```{r}
+library(gmodels)
+conf.mat_NB <- CrossTable(samples_test_NB, test_set_labels,
+                       prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+                       dnn = c('predicted', 'actual'))
+
+```
+
+\pagebreak
+```{r}
+accuracy <- sum(diag(conf.mat$t)) / sum(conf.mat$t)
+accuracy
+
+```
+
+### Model improvement
+To improve the ** Naive Bayes ** algorithm, I am going to change the value of `laplace`, this argument of the` naivebayes` function indicates the 
+positive double controlling Laplace smoothing. The default (0) disables Laplace smoothing.
+
+In the confusion matrix you can see that the number of false positives and false negatives is greater than that of the **KNN** algorithm, the 
+comparison of the different algorithms will be done later by comparing all the algorithms to see which one is better to use for this case
+```{r}
+samples_classifier_1 <- naiveBayes(train_set_NB[ -14], train_set_NB[,14], laplace = 0)
+
+```
+
+```{r}
+samples_test_NB_1 <- predict(samples_classifier, test_set_NB)
+
+```
+
+```{r}
+library(gmodels)
+conf.mat <- CrossTable(samples_test_NB_1, test_set_labels,
+                       prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+                       dnn = c('predicted', 'actual'))
+accuracy <- sum(diag(conf.mat$t)) / sum(conf.mat$t)
+accuracy
+
+```
+
+Despite changing the value of `laplace`, it can be seen that the data does not vary, the number of false positives and false negatives is 
+the same and the accuracy does not change either.
+
+## Neural Networks
+### Data transformation  
+For neural networks, the data have to be previously normalized, I have done this step in the first section, since the data were not on the same scale, 
+and that although they are all numbers, not all the variables are numeric, Also for neural networks, the best way to use the data is if it is normalized, 
+as I have already done in previous sections, it is not necessary to repeat it:
+```{r}
+train_set_NN <- train_set
+test_set_NN <- test_set
+
+```
+
+### Model training and evaluation
+To model the relationship between molecular descriptors and chemical toxicity, I am going to use a multi-layered feeding neural network. Stefan Fritsch and 
+Frauke Guenther's Neural Networks suite provides a standard, easy-to-use implementation of such networks. 
+It also offers a function for mapping the network topology.
+```{r}
+#install.packages("neuralnet")
+library(neuralnet)
+
+```
+
+The `neuralnet()` syntax is explained in the help page:
+```{r}
+#?neuralnet
+
+```
+
+I'll begin by training the simplest multilayer feedforward network with the default settings using only a single hidden node:
+```{r}
+NN_model=neuralnet(V14~ ., data=train_set_NN, hidden = c(3,2),act.fct = "logistic", 
+                   linear.output = FALSE)
+plot(NN_model)
+test = data.frame(test_set_NN,test_set_labels)
+Predict = compute(NN_model,test)
+predicted_model_NN <- Predict$net.result
+
+```
+
+```{r, include = FALSE}
+# Convert probabilities into binary classes
+prob <- Predict$net.result
+pred <- ifelse(prob>0.5, 1, 0)
+pred
+
+```
+
+In this simple model, there is one input node for each of the eight features, followed by a single hidden node and a single output node that predicts 
+the concrete strength. The weights for each of the connections are also depicted, as are the bias terms indicated by the nodes labeled with the number 1. 
+The bias terms are numeric constants that allow the value at the indicated nodes to be shifted upward or downward, much like the intercept in a linear equation.
+
+At the bottom of the figure, R reports the number of training steps and an error measure called the sum of squared errors (SSE), which, as you might expect, 
+is the sum of the squared differences between the predicted and actual values. The lower the SSE, the more closely the model conforms to the training data,
+which tells us about performance on the training data but little about how it will perform on unseen data.
+
+\pagebreak
+
+```{r}
+library(gmodels)
+conf.mat_NN <- CrossTable(pred, test_set_labels,
+                       prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+                       dnn = c('predicted', 'actual'))
+
+```
+\pagebreak
+
+## Support vector machines
+### Data transformation
+To do the SVM I have to pass column 14, which is the one that indicates whether the patient has a heart disease or not, to a factor, 
+I do that using the `factor ()` function
+```{r}
+train_set_SVM <- train_set
+test_set_SVM <- test_set
+
+```
+
+```{r}
+train_set_SVM$V14 <- factor(train_set$V14)
+test_set_SVM$V14 <- factor(test_set$V14)
+str(train_set_SVM)
+```
+
+### Model training and evaluation
+I'll use the SVM functions in the `kernlab` package. After you install the package, you can look at the documentation by typing `?ksvm`. 
+
+```{r}
+#install.packages("kernlab")
+library(kernlab)
+#?ksvm
+
+```
+
+```{r}
+letter_classifier <- ksvm(V14 ~ ., data = train_set_SVM,  kernel = "vanilladot")
+letter_classifier_1 <- ksvm(V14 ~ ., data = train_set_SVM,  kernel = "rbfdot")
+
+```
+
+When the training finishes (it can take some time depending on your computer), I can inspect some basic information about the training parameters and the 
+fit of the model:
+
+```{r}
+letter_classifier
+
+```
+
+```{r}
+letter_classifier_1
+
+```
+This information tells us very little about how well the model will perform in the real world. I'll need to examine its performance on the testing dataset 
+to know whether it generalizes well to unseen data.
+
+### Model improvement
+he `predict()` function allows us to use the letter classification model to make predictions on the testing dataset:
+
+```{r}
+letter_predictions <- predict(letter_classifier, test_set_SVM)
+
+```
+
+```{r}
+letter_predictions_1 <- predict(letter_classifier_1, test_set_SVM)
+
+```
+
+This returns a vector containing a predicted letter for each row of values in the testing data. Using the head() function, 
+we can see that the first predicted letters:
+
+```{r}
+head(letter_predictions)
+
+```
+
+```{r}
+head(letter_predictions_1)
+
+```
+
+```{r}
+conf.mat_SVM <- table(letter_predictions, test_set_SVM$V14)
+conf.mat_SVM
+```
+
+```{r}
+table(letter_predictions_1, test_set_SVM$V14)
+
+```
+
+Looking at each type of mistake individually may reveal some interesting patterns about the specific types of letters the model has trouble with, 
+but this is time consuming. I can simplify our evaluation by instead calculating the overall accuracy.
+
+The following command returns a vector of TRUE or FALSE values indicating whether the model's predicted letter agrees with (that is, matches) the actual 
+letter in the test dataset:
+ 
+```{r}
+agreement <- letter_predictions == test_set_SVM$V14
+
+```
+
+```{r}
+table(agreement)
+prop.table(table(agreement))
+
+```
+
+#### Try an RBF kernel
+```{r}
+set.seed(12345)
+letter_classifier_rbf <- ksvm(V14 ~ ., data = train_set_SVM, kernel = "rbfdot")
+letter_predictions_rbf <- predict(letter_classifier_rbf, test_set_SVM)
+
+agreement_rbf <- letter_predictions_rbf == test_set_SVM$V14
+table(agreement_rbf)
+prop.table(table(agreement_rbf))
+
+```
+
+#### Test various values of the cost parameter
+
+Now we will examine how the model performs for various values of C, the cost parameter. Rather
+than repeating the training and evaluation process repeatedly, we can use the `sapply()` function to apply a custom function to a vector of potential cost values.
+
+We begin by using the `seq()` function to generate this vector as a sequence counting
+from five to 40 by five. Then, as shown in the following code, the custom function
+trains the model as before, each time using the cost value and making predictions
+on the test dataset. Each model's accuracy is computed as the number of predictions
+that match the actual values divided by the total number of predictions. The result
+is visualized using the `plot()` function:
+
+```{r}
+cost_values <- c(1, seq(from = 5, to = 40, by = 5))
+
+accuracy_values <- sapply(cost_values, function(x) {
+  set.seed(12345)
+  m <- ksvm(V14 ~ ., data = train_set_SVM,
+            kernel = "rbfdot", C = x)
+  pred <- predict(m, test_set_SVM)
+  agree <- ifelse(pred == test_set_SVM$V14, 1, 0)
+  accuracy <- sum(agree) / nrow(test_set_SVM)
+  return (accuracy)
+})
+
+plot(cost_values, accuracy_values, type = "b")
+```
+
+## Decision trees
+In order to use the decision tree classification I need to download these libraries:
+```{r, include = FALSE}
+library(C50)
+
+```
+
+### Data transformation
+```{r}
+train_set_DT <- train_set
+test_set_DT <- test_set
+
+```
+
+```{r}
+train_set_DT$V14 <- factor(train_set_DT$V14)
+test_set_DT$V14 <- factor(test_set_DT$V14)
+
+```
+
+### Model training and evaluation
+The package for the C5.0 desicion tree algorithm must be loaded into the session:
+
+```{r}
+# install.packages("C50")
+require(C50)
+
+```
+
+Let's create the decision treee model and predict the outcome of the target feature for our test data.
+
+```{r}
+tree_model <- C5.0(train_set_DT[,-14], train_set_DT[,14])
+
+tree_model
+
+```
+
+By using the function `summary()` you can see the decisions that determine the splits of our data:
+```{r}
+summary(tree_model)
+
+```
+
+`stalk_root`, indicated at the end of the output. 
+Let's predict the outcome of the target feature for our test set:
+```{r}
+DT_prediction <- predict(tree_model, test_set_DT[,-14])
+
+```
+
+\pagebreak
+
+By creating a cross table, we will see how accurate our model has been:
+```{r}
+library(gmodels)
+conf.matrix_DT <- CrossTable(test_set_DT[,14], DT_prediction, prop.chisq = FALSE, 
+prop.c = FALSE, prop.r = FALSE, dnn = c('actual', 'predicted'))
+
+accuracy <- (conf.matrix_DT$t[1,1] + conf.matrix_DT$t[2,2])/nrow(test_set_DT)
+print(accuracy)
+
+```
+
+### Model improvement
+There are several techniques that can be used to improve a model using decision trees, these are among others:  
+
+Bagging: generateseveral training datasets by bootstrap sampling the original training data.These datasets are then used to 
+generate a set of models using a single learning algorithm.  
+
+Random Forests: Ensemble of decision trees: bagging + feature subsets Each tree is trained with only a random subset of features  
+
+Boosting: Sequential production of classifiers Each classifier is dependent on the previous one, and focuses on the previous one’s errors
+
+\pagebreak
+
+# Step 4: Conclusion section 
+In this last section I am going to compare the confusion matrices of all the algorithms made previously to see which one has the least errors, 
+the algorithm that has the least errors, will be the best at the time of predicting whether or not patients may have a heart disease, I understand 
+** FN ** and ** FP ** as failures or errors.  
+
+Another thing that I will compare is the time it takes to process the data, in addition to whether you have to modify the initial 
+data to be able to do the algorithm, since having to do it adds extra time
+
+##KNN
+The good thing about KNN is that it is very simple and effective, this can be seen by the number of badly classified predictions, which is very low, 
+more than the rest of the algorithms, it is also very fast in the training phase, the problems What the KNN has is that you have to do tests to check 
+which is the optimal value of k, you also have to modify the data so as not to make errors, so the classification phase is a little slower than other 
+algorithms and requires work additional
+
+###Naive Bayes
+Like the KNN, the naive bayes classifier, it is very simple, fast and efficient, an advantage that this algorithm has that others do not have is that 
+it is good at dealing with noisy data, which is data that is not necessary at the time of classify them, but one of the problems it has is that it 
+is not good if we have a lot of numerical data, and also Estimated probabilities are less reliable than the predicted classes
+
+##Neural Network
+The neural network is not the best algorithm when it comes to predicting data, although it is used to classify and numerical predictions,
+it is very slow to train, and it is more complex to program than others and is very prone to overfitting. and the results are difficult to interpret
+
+##Support Vector Machine
+The support vector machine like the neural network can be used for classification or numerical predictions, what differentiates it from neural networks 
+is that it is not due to overfitting and is not influenced by noise data, and it is easier to program than Neural networks, the bad thing about 
+it is that it is slow to train and the results are difficult to interpret, and due to the kernels that exist to find the optimal solution 
+we will have to try all the combinations, some being very slow at the time of processing and loading the data by creating a model
+
+##Decision trees
+Finally, the decision trees algorithm, the good thing it has is that it is more efficient than other more complex models,
+it can be used for very extensive and smaller data, in addition to that it can be used with categorical as well as numerical data, 
+the problem it has is which is easy to overfit, and if there is a small initial change it may change the result a lot, and if the tree is 
+very long it can be very difficult to interpret
+
+##Final conclusion
+The final conclusion that I come to is that the best algorithm that has come out to me to classify and predict the presence or absence of cardiac disease 
+is the KNN algorithm, since it is easy and fast to use, and although some data has to be modified for the correct realization of the algorithm it is the 
+most reliable in terms of the number of misclassified data
+
+\pagebreak
+
+#Step 5: References
+Most of the information I have taken from the pdu, as well as some parts of code, the data with which I carry out the study as 
+I have already specified at the beginning of the work I took them from:  
+http: //archive.ics.uci .edu / ml, also in order to solve the neural network confusion matrix, look at this link:   https://www.datacamp.com/community/tutorials/neural-network-models-r, the rest of the information by 
+asking the teacher
